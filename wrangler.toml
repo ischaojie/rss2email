@@ -1,0 +1,21 @@
+name = "rss2email"
+main = "./worker/index.ts"
+compatibility_date = "2023-04-15"
+
+kv_namespaces = [
+    { binding = "RSS2EMAIL", id = "906cc623ac9a4e3b83ca54c9a1e33a1a", preview_id = "15d5ecb1ef77471587bc684efe35a9fa" },
+]
+
+[vars]
+# which email will received the rss
+TO_EMAIL = "hi@chaojie.fun"
+
+[triggers]
+crons = ["1 * * * *"]
+
+
+[build]
+command = "npm run vite:build"
+
+[site]
+bucket = "./dist"
