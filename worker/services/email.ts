@@ -10,13 +10,14 @@ export type EmailContent = {
   value: string;
 };
 
+const fromEmail = {email: "bot@rss2email.com", name: "RSS2Email-Bot"}
+
 /*
 
 ref: https://blog.cloudflare.com/sending-email-from-workers-with-mailchannels/
 */
 export async function sendEmail(
   toEmail: Array<Email>,
-  fromEmail: Email,
   subject: string,
   content: Array<EmailContent>
 ) {

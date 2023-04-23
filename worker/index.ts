@@ -1,7 +1,7 @@
 import { Router, RouterType } from "itty-router";
 import { getAssetFromKV } from "@cloudflare/kv-asset-handler";
 import manifestJSON from "__STATIC_CONTENT_MANIFEST";
-import { addFeed, delFeed, getFeeds } from "./services/rss";
+import { addFeed, delFeed, getFeeds, syncLatestRss } from "./services/rss";
 import { parseFeed } from "./services/rss";
 
 const assetManifest = JSON.parse(manifestJSON);
@@ -20,7 +20,15 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    console.log(`Hello World!`);
+
+    switch (controller.cron) {
+      case "0 9 * * *":
+        await syncLatestRss(env);
+        break;
+      default:
+        console.log(`Hello World!`);
+        break;
+    }
   },
 
   async fetch(

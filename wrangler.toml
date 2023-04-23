@@ -11,7 +11,7 @@ kv_namespaces = [
 TO_EMAIL = "hi@chaojie.fun"
 
 [triggers]
-crons = ["1 * * * *"]
+crons = ["0 9 * * *"]
 
 
 [build]

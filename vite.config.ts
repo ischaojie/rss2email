@@ -6,15 +6,15 @@ import https from "https";
 // https://vitejs.dev/config/
 /** @type {import('vite').UserConfig} */
 export default defineConfig({
-  plugins: [react(), UnoCSS()],
   server: {
-    host: "localhost",
+    host: "127.0.0.1",
     proxy: {
       "/api": {
-        target: "https://rss2email.chaojie.workers.dev",
+        target: "https://rss2email.chaojie.workers.dev/",
         changeOrigin: true,
-        agent: new https.Agent(),
+        secure: false,
       },
     },
   },
+  plugins: [react(), UnoCSS()],
 });

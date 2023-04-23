@@ -1,27 +1,13 @@
-/*
-https://github.com/fb55/htmlparser2
-*/
 import * as htmlparser from "htmlparser2";
 import { Env } from "..";
 import { textEncode } from "../utils";
 import Feed from "htmlparser.DomUtils";
+import { EmailContent, sendEmail } from "./email";
 
-export type Email = {
-  email: string;
-  name: string;
-};
-
-export type EmailContent = {
-  type: string;
-  value: string;
-};
 const MAILCHANNEL_URL = "https://api.mailchannels.net/tx/v1/send";
 
 const KV_FEEDS = "feeds";
-const KV_FEED_READED_ITEMS = "feeds_readed_items:";
-
-const MAIL_TO: Email = [{ name: "chaojie", email: "hi@chaojie.fun" }];
-const MAIL_FROM: Email = { name: "Rss2mail", email: "hi@rss2mail.service" };
+const KV_FEED_ITEMS = "feed_items:";
 
 export async function getFeeds(env: Env) {
   return await env.RSS2EMAIL.get(KV_FEEDS, { type: "json" });
@@ -55,97 +41,59 @@ export async function parseFeed(url: string) {
     .catch((err) => console.error(err), null);
 }
 
-export async function syncLatestFeed(env: Env) {
-  const feedList = await getFeeds(env);
-  if (feedList.length === 0) return;
-  const feedsNewItems = await getNewItems(env, feedList);
+async function getNewItems(env: Env, feed: string) {
+  const key = `${KV_FEED_ITEMS}${feed}`;
+  const feedItems: string[] = (await env.RSS2EMAIL.get(key)) || [];
 
-  let emailContents: Array<EmailContent> = feedsNewItems
-    .entries()
-    .map(([feed, items]) => {
-      return {
-        type: "text/html",
-        value: `
-            <h1>${feed}</h1>
-            <ul>
-                ${items
-                  .map(
-                    (item) =>
-                      `<li><a href="${item.link}">${item.title}</a></li>`
-                  )
-                  .join("")}
-            </ul>
-            `,
-      };
-    });
+  const newItems = [];
+
+  const feedOrigin = await parseFeed(feed);
+  if (feedOrigin) {
+    const newItems = feedOrigin.items.filter(
+      (item) => !feedItems.includes(item.id)
+    );
+  }
+  return newItems;
+}
+
+export function makeMailContent(items): EmailContent[] {}
+
+export async function syncLatestRss(env: Env): boolean {
+  const feeds = await getFeeds(env);
+  const allNewItems;
+  const allEmailStr = "";
+  for (const feed of feeds) {
+    const newItems = await getNewItems(env, feed.origin);
+    const emailStr = `
+    <h3>New posts from <a href='${feed.link}'>${feed.title}</a>:</h3>
+    <ul>
+      ${newItems.map(
+        (item) => `<li><a href='${item.link}'>${item.title}</a></li>`
+      )}
+    </ul>
+    `;
+    allEmailStr += emailStr;
+    allNewItems.url = feed.origin;
+    allNewItems.items = newItems.map((item) => item.id);
+  }
 
   // send email
+  const to_email = { email: env.TO_EMAIL, name: "hakuna" };
+  const subject = "[Rss2Email] New posts";
+  const emailContent = { type: "text/html", value: allEmailStr };
   try {
-    await sendEmail(MAIL_TO, MAIL_FROM, `[Rss2mail] New posts`, emailContents);
-  } catch (error) {
-    console.error(`send email error: ${error}`);
-    return;
+    console.info("Sending email...");
+    await sendEmail(to_email, subject, emailContent);
+  } catch (err) {
+    console.error(err);
+    return false;
   }
 
-  // save new items
-  for (const [feedId, items] of feedsNewItems.entries()) {
-    let feedReadedItems =
-      (await env.KV_AUTOMATE.get(
-        `${KV_FEED_READED_ITEMS}${textEncode(feedId)}`
-      )) || "";
-    feedReadedItems = feedReadedItems.split("|");
-    feedReadedItems = feedReadedItems.concat(items.map((item) => item.id));
-    await env.KV_AUTOMATE.put(
-      `${KV_FEED_READED_ITEMS}${textEncode(feedId)}`,
-      feedReadedItems.join("|")
-    );
+  // save new posts
+  for (const feed of allNewItems) {
+    const key = `${KV_FEED_ITEMS}${feed.url}`;
+    const feedItems: string[] = (await env.RSS2EMAIL.get(key)) || [];
+    feedItems.push(...feed.items);
+    await env.RSS2EMAIL.put(key, JSON.stringify(feedItems));
   }
-}
-
-async function getNewItems(env: Env, feeds: Array<string>) {
-  let feedsNewItems = new Map();
-  for (const feedAddr: string of feeds) {
-    console.info(`process ${feedAddr}...`);
-
-    let feed;
-
-    try {
-      feed = await parseFeed(feedAddr);
-    } catch (error) {
-      console.error(`parse feed (${feedAddr}) error: ${error}`);
-      continue;
-    }
-
-    const key = `${KV_FEED_READED_ITEMS}${textEncode(feed.id)}`;
-    let feedReadedItems = env.KV_AUTOMATE.get(key) || "";
-    feedReadedItems = feedReadedItems.split("|");
-    const feedNewItems = feed.items.filter(
-      (item) => !feedReadedItems.includes(item.id)
-    );
-    feedsNewItems.set(feed.id, feedNewItems);
-  }
-  return feedsNewItems;
-}
-
-/*
-ref: https://blog.cloudflare.com/sending-email-from-workers-with-mailchannels/
-*/
-export async function sendEmail(
-  toEmail: Array<Email>,
-  fromEmail: Email,
-  subject: string,
-  content: Array<EmailContent>
-) {
-  return await fetch(MAILCHANNEL_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: toEmail }],
-      from: fromEmail,
-      subject: subject,
-      content: content,
-    }),
-  }).then((resp) => resp.json());
 }
